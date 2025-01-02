@@ -17,12 +17,12 @@ typedef struct {
   double particle_ht;
   double ashdiam;
   double part_density;
-  double fall_time;
+  double fall_time;							// total fall time from particle_ht to 0
   double plume_diffusion_fine_particle;
   double plume_diffusion_coarse_particle;
   double total_fall_time;
-  double wind_sum_x;
-  double wind_sum_y;
+  double wind_sum_x;						// drift distance by wind
+  double wind_sum_y;						// drift distance by wind
   double demon1;
 } TABLE;
 
