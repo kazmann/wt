@@ -89,7 +89,7 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
    **********************************************************************************/
   
   
-	int i = 0,j = 0, bin = -1; 
+	int i = 0, j = 0, bin = -1; 
 	double new_xspace, new_yspace, ht_above_vent; /*cos_wind = 0.0, sin_wind = 0.0, windspeed = 0.0*/
 	double sigma, demon2, demon3, ash_fall, layer, fall_time_adj = 0.0, total_fall_time=0.0;
 	double average_windspeed_x, average_windspeed_y, average_wind_direction, average_windspeed =0.0;
@@ -112,7 +112,8 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
 	double *ptr_wind;        /* arry used as data passing between part_fall_time_vg() */
 	                         /* wind advection of x and y coordinate will be stored   */
 	
-	ptr_wind = wind_element;
+	double temp0, temp1, temp2, xprime, yprime, demon1;
+	
 	/* they are added by K. Mannen (19-Jan-2011) */
 	
 	
@@ -143,18 +144,20 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
    * vent height.
    */
 	layer = erupt->vent_height - pt->elevation;
-	
+	ground_alt = pt->elevation;
 	/*windspeed = (level[0].wind_speed * pt->elevation) / erupt->vent_height;*/
 	/*cos_wind = cos(level[0].wind_dir);*/ /* windspeed;*/
 	/*sin_wind = sin(level[0].wind_dir);*/ /* windspeed;*/
-
 	   
 	for (i = 0; i < PART_STEPS; i++) { /* PART_STEPS_LOOP */
    
 		fall_time_adj = 0.0;
 		part_density = T[i][0].part_density;
 		ashdiam = T[i][0].ashdiam;
-		
+
+
+
+
 		/*printf("153 dens = %1.4f diam = %1.4f\n", part_density, ashdiam);*/
 		
 		/* Accumulate the particle sizes into bins of whole numbered phi sizes */
@@ -181,17 +184,26 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
 #endif	 
 		}
 
+
+#ifdef _PRINT
+	//fprintf(log_file, "LINE280\tashdiam\tparticle_ht\tv-pntx\tv-pnty\tcolsourcex\tcolsourcey\tcolheight\tnew_xspace\tnew_yspace");
+	//fprintf(log_file, "\ttemp0\ttemp1\txprime\typrime\ttemp2\tdemon1\twind_sum_x\twind_sum_y");
+	//fprintf(log_file, "\tave_wind_sp\tave_wind_dir\tSourceMag\tdemon2\tdemon3\tsigma\ttotal_fall_time\tmassloading\n");
+#endif
+	
 		for (j = 0; j < S_STEPS; j++) { /* COL_STEPS_LOOP */
      
   		total_fall_time = T[i][j].total_fall_time + fall_time_adj;
+		//printf("line 186 falltime plume-VE = %1.3f VE-GL = %1.3f plume-GL = %1.3f\n", T[i][j].total_fall_time, fall_time_adj, total_fall_time);
     	// fprintf(stderr, "%g %g %g ", T[i][j].total_fall_time, total_fall_time, fall_time_adj);
-      
+
     	/* Sum the adjustments (windspeed and wind_direction) 
     	 * for each particle size  falling from each level.
 		 */
 			
-   		wind_sum_x = wind_element[0]; /*modified by K. Mannen (19-Jan-2011) */
-	  	wind_sum_y = wind_element[1]; /*modified by K. Mannen (19-Jan-2011) */
+   		wind_sum_x = ptr_wind[0]; /*modified by K. Mannen (19-Jan-2011) */
+	  	wind_sum_y = ptr_wind[1]; /*modified by K. Mannen (19-Jan-2011) */
+		//printf("line 196 wind_x = %1.3f wind_y = % 1.3f\n", wind_sum_x, wind_sum_y);
 		
 		
 	    
@@ -215,7 +227,7 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
 			/* Find the average wind direction (direction of the velocity vector) */
 			if (average_windspeed_x < 0) {
 				average_wind_direction = 
-				atan(average_windspeed_y/average_windspeed_x ) + pi;
+				atan(average_windspeed_y/average_windspeed_x ) + M_PI;
 			} else 
     	  average_wind_direction = 
     	  atan(average_windspeed_y/average_windspeed_x);
@@ -243,19 +255,23 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
 				//fprintf(stderr, "c");
 			}
 
-			demon2 =  pi * sigma;
+			demon2 =  M_PI * sigma;
 			/*demon2 =  sqrt(demon2);*/
       
     	/* Modify fall time by the variation of wind velocity with height */
-			new_xspace = pnt_vent_x - C[j].centre_x;
-			new_yspace = pnt_vent_y - C[j].centre_y;
-			
+			new_xspace = pnt_vent_x - C[j+1].centre_x;
+			new_yspace = pnt_vent_y - C[j+1].centre_y;
+			//printf("line 254 average_wind direction = %1.3f speed = % 1.3f\n", average_wind_direction, average_windspeed);
 			demon3 = 
 			strat_average( average_wind_direction, 
       	            	 	 average_windspeed,             
 				             new_xspace, new_yspace, 
 				             total_fall_time,
 				             sigma); 
+			//printf("line261 demon1 = %1.4e, 2 = %1.4e, 3 = %1.4e\n", T[i][j].demon1, demon2, demon3);
+
+			//if(i == 0 && j == 0){printf("line263\ti\tj\tdemon1\tdemon2\tdemon3\tAWD\tAWS\tX\tY\tTFT\tSig\n");}
+			//printf("line264\t%d\t%d\t%1.4e\t%1.4e\t%1.4e\t%1.4e\t%1.4e\t%1.4e\t%1.4e\t%1.4e\t%1.4e\n", i, j, T[i][j].demon1, demon2, demon3, average_wind_direction, average_windspeed, new_xspace, new_yspace, total_fall_time, sigma);
 /*
 			if (!demon2 || isnan(demon2) || isinf(demon2) || isnan(demon3) || isinf(demon3)) {
  				fprintf(stderr, 
@@ -263,13 +279,32 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
       	i,j, layer,total_fall_time, fall_time_adj, T[i][j].demon1, demon2, demon3, sigma);
       	exit(-1);
 			}
- */     
+ */    
+							 
 			ash_fall = (T[i][j].demon1 / demon2) * demon3;
 			pt->mass += ash_fall;
 			pt->phi[bin] += ash_fall;
-			//fprintf(stderr, "\n");
-		}    
-	}
+			
+			//double temp0, temp1, temp2, xprime, yprime, demon1;
+		    temp0 = cos(average_wind_direction);
+		    temp1 = sin(average_wind_direction);
+    
+		    xprime = new_xspace * temp0 + new_yspace * temp1;
+		    yprime = new_yspace * temp0 - new_xspace * temp1;
+    
+		    temp2 = xprime - average_windspeed * total_fall_time;
+		    demon1 = temp2 * temp2 + yprime * yprime;
+			
+#ifdef _PRINT
+	//fprintf(log_file, "LINE280\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g", ashdiam, T[i][j].particle_ht, pnt_vent_x, pnt_vent_y, C[j+1].centre_x, C[j+1].centre_y, C[j+1].z, new_xspace, new_yspace);
+	//fprintf(log_file, "\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g", temp0, temp1, xprime, yprime, temp2, demon1, T[i][j].wind_sum_x, T[i][j].wind_sum_y);
+	//fprintf(log_file, "\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n", average_windspeed, average_wind_direction, T[i][j].demon1, demon2, demon3, sigma, total_fall_time, ash_fall);
+#endif
+	
+		}   // end of column step (j)
+		//if(i == 0){printf("line279\ti\tbin\tphi\n");}
+		//printf("line280\t%d\t%d\t%g\n", i, bin, pt->phi[bin]);
+	}       // end of particle step (i)
 #ifdef _PRINT
   fprintf(log_file, "PART_STEP=%d phi[%d] = %g\n", i, bin, pt->phi[bin]);
   fprintf(log_file, "OUT\n");
@@ -278,6 +313,31 @@ void tephra_calc(ERUPTION *erupt, POINT *pt, WIND *level2, STATS *stats) { /* te
   stats->max_falltime = max;
 }
 
+
+/* ----------------- New Function Starts Here -------------------- */
+/* Function strat_average accounts for the variation in wind velocity 
+   with height by using the average velocity value
+*/
+double strat_average( double average_wind_direction, 
+                      double average_windspeed,             
+			                double xspace, double yspace, 
+			                double total_fall_time,
+			                double sigma) {
+		
+		double temp0, temp1, xprime, yprime, demon1, demon3;
+			                  
+    temp0 = cos(average_wind_direction);
+    temp1 = sin(average_wind_direction);
+    
+    xprime = xspace * temp0 + yspace * temp1;
+    yprime = yspace * temp0 - xspace * temp1;
+    
+    temp0 = xprime - average_windspeed * total_fall_time;
+    demon1 = temp0 * temp0 + yprime * yprime;
+    demon3 = exp(-demon1/sigma); /* where sigma is calculated for the total fall time */
+    return demon3;
+			          
+}
 
 /* ----------------- New Function Starts Here -------------------- */
 /* function phi2m converts the ash diameter from 
@@ -400,6 +460,7 @@ double part_fall_time(double particle_ht, double layer, double ashdiam, double p
 }
 
 
+
 /* ----------------- New Function Starts Here -------------------- */
 /* function part_fall_time_vg determines the time of particle fall
   within each falling step between vent height and sea level
@@ -413,7 +474,7 @@ double part_fall_time(double particle_ht, double layer, double ashdiam, double p
   also average sin_wind and cos_wind are also dispatched using pointer *ptr_wind
   */
 
-double part_fall_time_vg(double particle_departure_ht, double ground_alt, WIND *level, double *ptr_wind, double ashdiam, double part_density)
+double part_fall_time_vg(double vent_elevation, double ground_elevation, WIND *level, double *ptr_wind, double ashdiam, double part_density)
 {
 	int j=0;
 	double particle_ht, layer;			/* particle height, fall distance */
@@ -424,36 +485,36 @@ double part_fall_time_vg(double particle_departure_ht, double ground_alt, WIND *
 
 	
 	fall_time = 0;
-	fall_time_ttl_vg = 0;
+	fall_time_ttl_vg = 0;	// if ground_elevation > vent_elevation, fall time vg = 0
 	h0 = level[j].wind_height;
 	cos_wind=0; sin_wind=0; cos_sum=0; sin_sum=0;
 	
-	if(ground_alt < particle_departure_ht) /* ground must be lower than vent */
+	if(ground_elevation < vent_elevation) /* ground must be lower than vent */
 	{
-		while(ground_alt >= level[j].wind_height)
+		while(ground_elevation >= level[j].wind_height)
 		{
 			h0 = level[j].wind_height;
-			//printf("line 339 j= %d, h0 = %1.1f ground = %1.1f\n",j, h0, ground_alt);
+			//printf("line 436 j= %d, h0 = %1.1f ground = %1.1f\n",j, h0, ground_elevation);
 			j = j + 1;
 		}
 		
 		particle_ht = level[j].wind_height;
-		h0=ground_alt;
+		h0=ground_elevation;
 		
 	
-		/*printf("line 345 j= %d, particle_ht = %1.1f ground = %1.1f\n",j, particle_ht, h0);*/
+		//printf("line 444 j= %d, particle_ht = %1.1f ground = %1.1f\n",j, particle_ht, h0);
 	
-		while(particle_ht <= particle_departure_ht)
+		while(particle_ht <= vent_elevation)
 		{
 			layer = particle_ht - h0;
 			if(layer<=0)break;
 			
 			
-			/*printf("440 j = %d, diam = %1.4f dens = %1.4f\n", j, ashdiam, part_density);*/
+			//printf("452 particle_ht = %1.3f, wind_level = %1.3f, j = %d, diam = %1.4f dens = %1.4f\n", particle_ht, level[j].wind_height, j, ashdiam, part_density);
 			fall_time = part_fall_time(particle_ht, layer, ashdiam, part_density);
 			fall_time_ttl_vg += fall_time;
 			
-			/*printf("440 j = %d, fall time = %1.4f\n", j, fall_time);*/
+			//printf("456 j = %d, fall time = %1.4f ttl fall time vg = %1.4f\n", j, fall_time, fall_time_ttl_vg);
 		
 			/*  calc wind advection */
 			cos_wind = cos(level[j].wind_dir) * level[j].wind_speed * fall_time;
@@ -497,7 +558,8 @@ double pdf_grainsize(double part_mean_size, double part_size_slice, double part_
 	{
 		
 		/* PDF_sizeclass_DEMON1 = 1.0 / 2.506628 * erupt->part_sigma_size */
-		demon3   = part_size_slice - part_mean_size;
+		//demon3   = part_size_slice - part_mean_size;
+		demon3   = part_size_slice - part_step_width / 2 - part_mean_size; //20221226 modified
 		temp = -demon3 * demon3 / TWO_x_PART_SIGMA_SIZE; /* 2.0 * erupt->part_sigma_size * erupt->part_sigma_size */
 		demon2   = exp(temp);
 		func_rho = PDF_GRAINSIZE_DEMON1 * demon2 * part_step_width; 
@@ -514,47 +576,6 @@ double pdf_grainsize(double part_mean_size, double part_size_slice, double part_
 	return func_rho;
 }
 
-/* ----------------- New Function Starts Here -------------------- */
-/* Function strat_average accounts for the variation in wind velocity 
-   with height by using the average velocity value
-   
-		exp[ -5{ (x'-ut)^2 + y'^2} / {8*pi*C(t+td)} ]
-		
-   over the path of the particle as it falls from 
-   its column release height to the ground.
-    
-   u = wind velocity (m/s), varies with height
-   t = particle fall time 
-   td = particle diffusion time
-   
-   The Suzuki equation has been formulated s.t. the wind is in the x direction
-   We therefore need to transform the coordinates (xspace and yspace) to xprime
-   and yprime, with xprime increasing in the downwind direction:
-   x' = x cos a + y sin a
-   y' = y cos a - x sin a
-
-   
-*/
-double strat_average( double average_wind_direction, 
-                      double average_windspeed,             
-			                double xspace, double yspace, 
-			                double total_fall_time,
-			                double sigma) {
-		
-		double temp0, temp1, xprime, yprime, demon1, demon3;
-			                  
-    temp0 = cos(average_wind_direction);
-    temp1 = sin(average_wind_direction);
-    
-    xprime = xspace * temp0 + yspace * temp1;
-    yprime = yspace * temp0 - xspace * temp1;
-    
-    temp0 = xprime - average_windspeed * total_fall_time;
-    demon1 = temp0 * temp0 + yprime * yprime;
-    demon3 = exp(-demon1/sigma); /* where sigma is calculated for the total fall time */
-    return demon3;
-			          
-}
 
 /* 
    inputs:
@@ -566,7 +587,8 @@ double strat_average( double average_wind_direction,
    output: the probability that a given grainsize will be released from a given height
 */
 
-double plume_pdf0(double x, int slice, double none0, double vent_elevation) {
+double plume_pdf0(double x, int slice, double none0, double none1) {
+	/* In wt, 3rd and 4th arguments (none0 and none1) are not used */
 
 	double probability;
 	double fallout_threshold;
@@ -577,10 +599,9 @@ double plume_pdf0(double x, int slice, double none0, double vent_elevation) {
  
 	probability = 0.0;
 	fallout_threshold = threshold;
-	
   if (x > fallout_threshold) {
      
-    if (!num_slices_left) {
+    if (!num_slices_left) { // Since num_slices_left is "static int", it is not 0 after the first call
       num_slices_left = S_STEPS - slice;
       plume_slice = 1.0 / (double)num_slices_left;
       /* fprintf(stderr, "slices left = %d\n ", num_slices_left); */
@@ -596,16 +617,6 @@ double plume_pdf0(double x, int slice, double none0, double vent_elevation) {
   return probability; 
 }
 
-/* 
-   inputs:
-   x: height of a particle within the plume, relative to vent height
-   slice: integration step
-   beta: the column beta parameter
-   none: not used
-   
-   output: the probability that a given grainsize will be released from a given height
-*/
-
 double plume_pdf1(double z, int slice, double plume_height, double vent_elevation) {
 	/*
 		SUZUKI FUNCTION 
@@ -613,8 +624,8 @@ double plume_pdf1(double z, int slice, double plume_height, double vent_elevatio
 		this function is coded by K. Mannen (10-JAN-2011)
 		z     particle release height
 		slice integration step
-		spa   suzuki parameter A
-		spl   suzuki parameter lamda
+		SUZUKI_A   suzuki parameter A
+		SUZUKI_LAMDA   suzuki parameter lamda
 	*/
 	double probability = 0;
 	static double normalization_constant = 0;
@@ -718,11 +729,16 @@ void set_eruption_values(ERUPTION *erupt, WIND *wind, int *gl_ptr) { /* set_erup
   double x, total_P_col, total_P_part, cum_prob_part, cum_prob_col, total_P;
   double particle_ht, cum_fall_time, wind_x, wind_y, ht_above_vent, temp;
   double col_prob, part_prob;
+  double v_phi;
+
+  double fall_v;
 
   double ht_section_width;
   double part_section_width;
   double ht_step_width;
   double part_step_width;
+  double alpha = 0.0;
+  double beta = 0.0;
 	
   double daemon_sq_sigma, daemon_fine, daemon_coarse;  /* added by Kaz (Dec.02,2010) */
 
@@ -737,7 +753,7 @@ void set_eruption_values(ERUPTION *erupt, WIND *wind, int *gl_ptr) { /* set_erup
 
   threshold = PLUME_RATIO * S_MAX; //PLUME_RATIO * (erupt->max_plume_height - erupt->vent_height);
   //printf("line 738 PR %1.4f Threshold %1.4f Smax %1.4f\n", PLUME_RATIO, threshold, S_MAX);
-  BETA_x_SQRT_TWO_PI = erupt->column_beta * sqrt(2.0 * pi);
+  BETA_x_SQRT_TWO_PI = erupt->column_beta * sqrt(2.0 * M_PI);
   TWO_BETA_SQRD = 2.0 * erupt->column_beta * erupt->column_beta;
   PDF_GRAINSIZE_DEMON1 = 1.0 / (2.506628 * erupt->sigma_phi);
   TWO_x_PART_SIGMA_SIZE = 2.0 * erupt->sigma_phi * erupt->sigma_phi;
@@ -767,7 +783,6 @@ void set_eruption_values(ERUPTION *erupt, WIND *wind, int *gl_ptr) { /* set_erup
     //#endif
   }    
   total_P_col = cum_prob_col;
-  
   //fprintf( stderr, "total_P_col=%g\n ", total_P_col);
 
   cum_prob_part = 0.0;
@@ -777,10 +792,6 @@ void set_eruption_values(ERUPTION *erupt, WIND *wind, int *gl_ptr) { /* set_erup
     cum_prob_part += prob;
 	
     //fprintf(stderr, " grain_size=%.2f, prob=%g, cum_prob=%g\n", y, prob, cum_prob_part);
-    
-#ifdef _PRINT
-    fprintf(log_file, " grain_size=%g, prob=%g, cum_prob=%g\n", y, prob, cum_prob_part);
-#endif
     y += part_step_width;
   }
   total_P_part = cum_prob_part;
@@ -833,7 +844,7 @@ void set_eruption_values(ERUPTION *erupt, WIND *wind, int *gl_ptr) { /* set_erup
       }
     }
 fprintf(log_file,
-	      "\nPart_Ht\ts\tAsh_Diam\tPart-Den\tFalltime\tDFP\tDCP\tTFalltime\tWsumX\tWsumY\tColumn_x\tColumn_y\treleased_mass\n");
+	      "\nPart_Ht\ts\tAsh_Diam\tPart-Den\tFalltime\tFallV\tDFP\tDCP\tTFalltime\tWsumX\tWsumY\tColumn_x\tColumn_y\treleased_mass\tv_phi\n");
 	      
     /* Start with the maximum particle size */
 	y = (erupt)->min_phi;
@@ -873,7 +884,8 @@ fprintf(log_file,
 	         in the column to the next column release point.
 	       */    
 	      T[i][j].fall_time = 
-	      part_fall_time(particle_ht, ht_step_width, T[i][0].ashdiam, T[i][0].part_density); 
+	      part_fall_time(particle_ht, ht_step_width, T[i][0].ashdiam, T[i][0].part_density);
+		  fall_v = ht_step_width / T[i][j].fall_time;
 	      
     	 /* Particle diffusion time (seconds) */
     	 //ht_above_vent = particle_ht - erupt->vent_height; (commented out by Kaz Apr. 28, 2017)
@@ -918,7 +930,7 @@ fprintf(log_file,
 			}
 			
 #ifdef _PRINT
-    fprintf(log_file, " i=%g, j=%g, cum_prob=%g\n", y, prob, cum_prob_part);
+    //fprintf(log_file, " i=%g, j=%g, cum_prob=%g\n", y, prob, cum_prob_part);
 #endif
 	     
 	      /* Sum the windspeed and wind_direction for each particle size 
@@ -937,7 +949,13 @@ fprintf(log_file,
 	      
 	     T[i][j].wind_sum_x = wind_x;
          T[i][j].wind_sum_y = wind_y;
-	      
+	     
+		 // Meaning of i or j = 0 is following
+		 // s = 0   at C[0], T[–][j], and wind[1]
+		 // s = 100 at C[1], T[0][j], and wind[2]
+		 // Column data inlude that of at the source vent, while TABLE (T) does not and starts from the next step of the source
+		 
+		 
 	      /* Accumulate the time it takes each particle size to descend
 	         from its release point down
 	         to its final resting place.This part of the code just 
@@ -948,22 +966,41 @@ fprintf(log_file,
 	       */
 	    cum_fall_time += T[i][j].fall_time;
 	    T[i][j].total_fall_time = cum_fall_time;
-        col_prob = 
-        (*pdf)(C[j+1].s, j, erupt->max_plume_height, erupt->vent_height);
-      
+        col_prob = (*pdf)(C[j+1].s, j, erupt->max_plume_height, erupt->vent_height);
+		/* Select Particle Segregation Pattern (or Source Magnitude Distribution; SMD)*/
+		if(PLUME_THICKNESS == -9999 && SOURCE_DECAY_RATE == -9999){
+			T[i][j].demon1 = (erupt->total_ash_mass * col_prob  * part_prob) / total_P;
+		}else if(PLUME_THICKNESS > 0 && SOURCE_DECAY_RATE > 0){
+	        fprintf(stderr, 
+	    	      "ERROR\nYou cannot assign both of PLUME_THICKNESS and SOURCE_DECAY_RATE at once. Assign either or none of both.\nPROGRAM HAS BEEN HALTED tephra_calc.c L959\n\n");
+	        exit(1);
+		}else if(PLUME_THICKNESS > 0){
+			v_phi = 1 / part_fall_time(PLUME_HEIGHT, 1, T[i][0].ashdiam, T[i][0].part_density); // terminal velocity of particle
+			beta = v_phi / (PLUME_THICKNESS * WIND_HT);
+			alpha = exp(-1 * beta * C[j].s) - exp(-1 * beta * C[j+1].s);
+			T[i][j].demon1 = (erupt->total_ash_mass * part_prob) / total_P * alpha;
+		}else if(SOURCE_DECAY_RATE > 0){
+			beta = SOURCE_DECAY_RATE;
+			alpha = exp(-1 * beta * C[j].s) - exp(-1 * beta * C[j+1].s);
+			T[i][j].demon1 = (erupt->total_ash_mass * part_prob) / total_P * alpha;
+		}else{
+	        fprintf(stderr, 
+	    	      "ERROR\nAssign appropriate value for PLUME_THICKNESS or SOURCE_DECAY_RATE or remain both -9999 for uniform particle release.\nPROGRAM HAS BEEN HALTED tephra_calc.c L959\n\n");
+	        exit(1);
+		}
         /* Normalization is now done here */
-        T[i][j].demon1 =  
-        (erupt->total_ash_mass * col_prob  * part_prob)/total_P;
+        
         
 	      //T[i][j].particle_ht = C[j].z;
 	      	
 	      fprintf(log_file,
-	      "%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n",
+	      "%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n",
 	      T[i][j].particle_ht,
 		  C[j+1].s,
 	      T[i][j].ashdiam, 
 	      T[i][j].part_density, 
 	      T[i][j].fall_time,
+		  fall_v,
 	      T[i][j].plume_diffusion_fine_particle,
 	      T[i][j].plume_diffusion_coarse_particle,
 	      T[i][j].total_fall_time,
@@ -971,7 +1008,8 @@ fprintf(log_file,
 	      T[i][j].wind_sum_y,
 		  C[j+1].centre_x,
 		  C[j+1].centre_y,
-		  T[i][j].demon1); //T[i][j].demon1);
+		  T[i][j].demon1,
+		  v_phi); //T[i][j].demon1);
       } /* END COL_STEPS_LOOP */ 
       
       fprintf(log_file, "\n");
@@ -980,8 +1018,9 @@ fprintf(log_file,
   	fprintf(log_file, "OUT\n");
 }
 
-void read_column_file(int step_column){ // moved from windy.c on Feb. 10, 2017 by Kaz
+void read_column_file(int step_column){ // moved from windy.c on Feb. 10, 2017 by Kaz; called by windy.c
 	int i=0;
+	int base=1;
 	int ret, ttlline;
 	double	z, s, x, 
 			dir, northing, easting, 
@@ -1012,20 +1051,21 @@ void read_column_file(int step_column){ // moved from windy.c on Feb. 10, 2017 b
 						&U, &R, &T
 						);
 						
-						if(i>0){
-							C[i-1].centre_x = northing;
-							C[i-1].centre_y = easting;
-							C[i-1].radius = R;
+						if(i>=base){
+							C[i-base].centre_x = northing;
+							C[i-base].centre_y = easting;
+							C[i-base].radius = R;
 						
-							C[i-1].s = s;
-							C[i-1].z = z;
-							C[i-1].wind_dir = dir;
-							C[i-1].wind_v = V;
+							C[i-base].s = s;
+							C[i-base].z = z;
+							C[i-base].wind_dir = dir;
+							C[i-base].wind_v = V;
+							//printf("L1055 i = %d\t%g\n", i, s);
 						}
 		}
+		
 		i++;
 	}
-	
 	fclose(op);
 	
 }
