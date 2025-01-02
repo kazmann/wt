@@ -48,6 +48,8 @@ int WIND_COLUMNS = 3;
 double PLUME_RATIO = 0.1;
 double WIND_INTERVAL;
 double PLUME_HEIGHT = -9999;
+double PLUME_THICKNESS = -9999;        /* added by Kaz 09-Mar-2020 */
+double SOURCE_DECAY_RATE = -9999;      /* added by Kaz 16-Sep-2021 */
 double ERUPTION_MASS = 1e10;
 double MAX_GRAINSIZE = -7.0;
 double MIN_GRAINSIZE = 7.0;
@@ -71,12 +73,16 @@ int S_STEPS= -9999;
 double S_HT_MAX = -9999;
 int S_HT_STEPS =  -9999;
 
+double KS_ENTRAIN_U = 0.09;	// Added on 27 Oct 2021
+double KW_ENTRAIN_V = 0.9;	// Added on 27 Oct 2021
+
+
 /*define the following data structures for the code
   full descriptions are found in common_structures.h */
 static ERUPTION *erupt;
 static GRAIN *g_ptr;	/* 18-Jan-2011 added by Kaz */
 static WIND **W;
-static WIND **W2;		/* 18-Jan-2011 added by Kaz */
+static WIND **W2;		/* 18-Jan-2011 added by Kaz; wind condition between vent height and sea level */
 static POINT *pt;
 
 
@@ -685,9 +691,8 @@ int get_wind(FILE *in) {
 			  				W[i][j].wind_height, W[i][j].wind_speed, W[i][j].wind_dir);
 							
 						W[i][j].wind_dir *= DEG2RAD; /* change to radians */
-							
+						j++;
 		}
-		j++;
 	}	
 	fclose(op);
 
@@ -833,8 +838,6 @@ int get_wind2(FILE *in_wind) {
 	      "%f\t%f\t%f\n", 
 				W2[i][j].wind_height, W2[i][j].wind_speed, W2[i][j].wind_dir);
 		
-		
-		
 	      W2[i][j].wind_dir *= DEG2RAD; /* change to radians */
 	      break; /* ready to rescan the file for a match for the next level */
 	}  /* end if */
@@ -947,11 +950,6 @@ int init_globals(char *config_file) {
       PART_STEPS = (int)atoi(token);
       fprintf(stderr, "PART_STEPS = %d\n", PART_STEPS);
     }
-    /*else if (!strncmp(token, "COL_STEPS", strlen("COL_STEPS"))) {
-      token = strtok_r(NULL, space, ptr1);
-      COL_STEPS = (int)atoi(token);
-      fprintf(stderr, "COL_STEPS = %d\n", COL_STEPS);
-    } commented out Feb 7, 2017*/
     else if (!strncmp(token, "PLUME_MODEL", strlen("PLUME_MODEL"))) {
       token = strtok_r(NULL,space,ptr1);
       PLUME_MODEL = (int)atoi(token);
@@ -995,11 +993,26 @@ int init_globals(char *config_file) {
       WIND_COLUMNS = (int)atoi(token);
       fprintf(stderr, "WIND_COLUMNS = %d\n", WIND_COLUMNS);
     }
-    /*else if (!strncmp(token, "PLUME_HEIGHT", strlen("PLUME_HEIGHT"))) {
+    else if (!strncmp(token, "PLUME_THICKNESS", strlen("PLUME_THICKNESS"))) {        /* added by Kaz 09-Mar-2020 */
       token = strtok_r(NULL, space, ptr1);
-      PLUME_HEIGHT = strtod(token, NULL);
-      fprintf(stderr, "PLUME_HEIGHT = %.1f\n", PLUME_HEIGHT);
-    } commented out Feb 7, 2017*/
+      PLUME_THICKNESS = strtod(token, NULL);
+      fprintf(stderr, "PLUME_THICKNESS = %.1f\n", PLUME_THICKNESS);
+    }
+    else if (!strncmp(token, "SOURCE_DECAY_RATE", strlen("SOURCE_DECAY_RATE"))) {        /* added by Kaz 16-SEP-2021 */
+      token = strtok_r(NULL, space, ptr1);
+      SOURCE_DECAY_RATE = strtod(token, NULL);
+      fprintf(stderr, "SOURCE_DECAY_RATE = %g\n", SOURCE_DECAY_RATE);
+    }
+    else if (!strncmp(token, "KS_ENTRAIN_U", strlen("KS_ENTRAIN_U"))) {       /* added by Kaz 27-OCT-2021 */
+      token = strtok_r(NULL, space, ptr1);
+      KS_ENTRAIN_U = strtod(token, NULL);
+      fprintf(stderr, "KS_ENTRAIN_U = %g\n", KS_ENTRAIN_U);
+    }
+    else if (!strncmp(token, "KW_ENTRAIN_V", strlen("KW_ENTRAIN_V"))) {        /* added by Kaz 27-OCT-2021 */
+      token = strtok_r(NULL, space, ptr1);
+      KW_ENTRAIN_V = strtod(token, NULL);
+      fprintf(stderr, "KW_ENTRAIN_V = %g\n", KW_ENTRAIN_V);
+    }
     else if (!strncmp(token, "ERUPTION_MASS", strlen("ERUPTION_MASS"))) {
       token = strtok_r(NULL, space, ptr1);
       ERUPTION_MASS = strtod(token, NULL);
