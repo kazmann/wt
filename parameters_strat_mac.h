@@ -17,7 +17,7 @@
  * MAX_LINE, COL_STEPS and PART_STEPS dimensionless
 */
 #define LOG_FILE "node.txt"
-/* #define _PRINT 1 */
+#define _PRINT 1
 #define pi 3.141592654
 #define DEG2RAD 0.017453293
 /*#define DEBUG 0 */
@@ -78,7 +78,12 @@ extern double MAGMA_TEMPERATURE;
 extern double INITIAL_PLUME_VELOCITY;
 extern double VENT_RADIUS;
 extern double PLUME_HEIGHT;
+extern double PLUME_THICKNESS;
+extern double SOURCE_DECAY_RATE;
+extern double WIND_HT;
 extern double SLICE_HEIGHT;
+extern double KS_ENTRAIN_U;	// Added on 27 Oct 2021
+extern double KW_ENTRAIN_V;	// Added on 27 Oct 2021
 
 extern double ds;
 extern double S_MAX;

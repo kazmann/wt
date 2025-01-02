@@ -8,6 +8,7 @@
 	coded by Kaz Mannen (2017 Jan)
 
 	func## in this code is correlated to eq## in Woodhouse et al. [2013]
+	modification on Jan 19, 2022
 */
 
 #include <stdio.h>
@@ -53,6 +54,7 @@ double U = -9999;
 double R = -9999;
 double n0;
 double T;
+double WIND_HT = -9999;
 
 double rho_s = 1200;
 double rho_w = 1000;
@@ -61,8 +63,8 @@ double Ca = 998; //713;
 double Cs = 1617; //1100;
 double Cv = 1850; //1850
 
-double ks = 0.09;  // another k should be introduced for gas thurst region but uniform value in this code
-double kw = 0.9;
+//double ks = 0.09;  // another k should be introduced for gas thurst region but uniform value in this code
+//double kw = 0.9;
 
 double theta = M_PI / 2; // PI / 2
 
@@ -94,11 +96,18 @@ void windy(FILE *in_wind){	// The main routine in this file
 	
 	double Hg, Hb, Ht;
 	double U0, R0;
-	double T_final, Ta_final;
+	double U_Ht, T_Ht, R_Ht, x_Ht;
+	double Q_hb, rho_c_hb, t_hb;
+	
+	double g_dir_previous, north_previous, east_previous, ta_previous, p_previous, rho_a_previous, rho_c_previous, n_previous;
+	double Q_previous, Cp_previous, Rg_previous, M_previous;
+	
 	int step_column;
 	
 	n0 = INITIAL_WATER_CONTENT;
 	z0 = VENT_ELEVATION;
+	
+	Q_hb = 0, rho_c_hb = 0;
 	
 	total=read_wind(in_wind);	// read wind file and store in W1
 	
@@ -122,6 +131,7 @@ void windy(FILE *in_wind){	// The main routine in this file
 	
 	Rg=Rg0;
 	rho_c=func17(n0, p, Rg, T); // get rho_c
+	rho_c_hb = 0;
 	
 	if(n0 < 0 || n0 > 1){
       fprintf(stderr, 
@@ -178,38 +188,39 @@ void windy(FILE *in_wind){	// The main routine in this file
 	
 	if(S_MAX < 0){max = 99999;}else{max = S_MAX;}
 	
-	while(i < 100000 && M > 0.0 && theta > 0.0 && s <= max){
-		Ht = z; // when M < 0 (static) or theta < 0 (windy), z just before the height is considered as Ht 
+	// Step until plume reaches to the Ht
+	while(i < 100000 && M > 0.0 && theta > 0.0 && theta < M_PI && s <= max){
+		Ht = z; // when M < 0 (static) or theta < 0 (windy), z just before the height is considered as Ht
+		WIND_HT = V;
+		U_Ht = U, T_Ht = T, R_Ht = R, x_Ht = x;
 		// top of the gas thrust region
 		if(flag==0 && rho_a - rho_c > 0){flag=1; Hg = z;}	// top of the gas-thrust region
 		// top of the convective region
-		if(flag==1 && rho_a - rho_c < 0){flag=2; Hb = z;}	// top of the convective region
-		fprintf(f, "%1.4f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.4f\t%1.4f\t%1.2f\t", z, s, x, g_dir, north, east, ta, p, rho_a, rho_c, n);
-		fprintf(f, "%1.2e\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t", Q, Cp, Rg, V, Ue, M, theta);
-		fprintf(f, "%1.2f\t%1.2f\t%1.2f\n", U, R, T);
-		T_final = T;
-		Ta_final = ta;
+		if(flag==1 && rho_a - rho_c < 0){flag=2; Hb = z; Q_hb = Q; rho_c_hb = rho_c; t_hb = T;}	// top of the convective region
+		fprintf(f, "%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t", z, s, x, g_dir, north, east, ta, p, rho_a, rho_c, n);
+		fprintf(f, "%1.4e\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t", Q, Cp, Rg, V, Ue, M, theta);
+		fprintf(f, "%1.4f\t%1.4f\t%1.4f\n", U, R, T);
+		
+		g_dir_previous = g_dir; north_previous = north; east_previous = east; 
+		ta_previous = ta; p_previous = p; rho_a_previous = rho_a; rho_c_previous = rho_c; n_previous = n;
+		north_previous = north; east_previous = east;
+		Q_previous = Q; Cp_previous = Cp; Rg_previous = Rg; M_previous = M;
+		
 		rk(total);
 		i++;
 	}
-	
+	U = WIND_HT, R = R_Ht, T = T_Ht, x = x_Ht;
 	//fclose(f);
 	
 	f2 = fopen("column_parameters.txt", "w");
 	
 	//step_column = (int)((Ht - z0) / SLICE_HEIGHT);	// column step that is a parameter in tephra 2 is set to give each slice is about 100m
-	fprintf(f2, "#Q0\tU0\tR0\tHg\tHb\tHt\tColumnT\tAtmT\tCOL_STEP\n");
-	fprintf(f2, "%1.2e\t%1.2e\t%1.2e\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%d\n", Q0 * M_PI, U0, R0, Hg, Hb, Ht, T_final, Ta_final, step_column);
+	fprintf(f2, "#Q0\tU0\tR0\tHg\tHb\tHt\tColumnT\tAtmT\tCOL_STEP\tn_final\tQ_final\tQ_hb\trho_c_hb\tt_hb\n");
+	//fprintf(f2, "%1.4e\t%1.4e\t%1.4e\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%d\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\n", Q0 * M_PI, U0, R0, Hg, Hb, Ht, T_final, Ta_final, step_column, n_final, Q_final, Q_hb, rho_c_hb, g_dir_final);
+	fprintf(f2, "%1.4e\t%1.4e\t%1.4e\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%d\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\n", Q0 * M_PI, U0, R0, Hg, Hb, Ht, T, ta, step_column, n, Q, Q_hb, rho_c_hb, t_hb);
 	
 	fclose(f2);
 
-	/*
-	if(Ht - (double)(int)Ht < 0.5)
-	{Ht = (double)(int)Ht;}
-	else
-	{Ht = (double)(int)(Ht + 0.9);}
-	*/
-	
 	COL_STEPS = step_column;
 	PLUME_HEIGHT = Ht;
 	
@@ -224,23 +235,33 @@ void windy(FILE *in_wind){	// The main routine in this file
 		S_STEPS = S_MAX / ds;
 	}
 	
+	g_dir = g_dir_previous; north = north_previous; east = east_previous; 
+	ta = ta_previous; p = p_previous; rho_a = rho_a_previous; rho_c = rho_c_previous; n = n_previous;
+	north = north_previous; east = east_previous;
+	Q = Q_previous; Cp = Cp_previous; Rg = Rg_previous; M = M_previous;
 	
-	//printf("S_STEPS = %d\tS_MAX = %1.4f\n", S_STEPS, S_MAX);
-	
+	// After reaching Ht
+	theta = 0; Ue = 0;
 	for (i = i;  i < S_STEPS + 1; i++){
-		s = s + ds;
-		x += ds * cos(theta);
+		s += ds;
+		x += ds;
 		north = north + ds * cos(g_dir / 360 * 2 * M_PI);
 		east = east + ds * sin(g_dir / 360 * 2 * M_PI);
-		fprintf(f, "%1.4f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.4f\t%1.4f\t%1.2f\t", Ht, s, x, g_dir, north, east, ta, p, rho_a, rho_c, n);
-		fprintf(f, "%1.2e\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t", Q, Cp, Rg, V, Ue, M, theta);
-		fprintf(f, "%1.2f\t%1.2f\t%1.2f\n", U, R, T);
+		fprintf(f, "%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t", Ht, s, x, g_dir, north, east, ta, p, rho_a, rho_c, n);
+		fprintf(f, "%1.4e\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t", Q, Cp, Rg, WIND_HT, Ue, M, theta); // V becomes WIND_HT
+		fprintf(f, "%1.4f\t%1.4f\t%1.4f\n", U, R, T); // U becomes WIND_HT
 	}
 	
 	fclose(f);
 	//printf("kokodayo %1.4f\t%d\n", S_MAX, S_STEPS);
 	read_column_file(S_STEPS);
 	free(W1); //20180218
+}
+
+double thetacheck(double tmp){
+	if(tmp < 0){tmp = 0;}
+	
+	return tmp;
 }
 
 void rk(int total){
@@ -269,6 +290,7 @@ void rk(int total){
 	Q_tmp = Q + dQ_over_ds1 * ds * 0.5;	
 	M_tmp = M + dM_over_ds1 * ds * 0.5;
 	theta_tmp = theta + dtheta_over_ds1 * ds * 0.5;
+	theta_tmp = thetacheck(theta_tmp);
 	E_tmp = E + dE_over_ds1 * ds * 0.5;
 	
 	// centre position of the next step
@@ -307,6 +329,7 @@ void rk(int total){
 	Q_tmp = Q + dQ_over_ds2 * ds * 0.5;	
 	M_tmp = M + dM_over_ds2 * ds * 0.5;
 	theta_tmp = theta + dtheta_over_ds2 * ds * 0.5;
+	theta_tmp = thetacheck(theta_tmp);
 	E_tmp = E + dE_over_ds2 * ds * 0.5;
 	
 	// centre position of the next step
@@ -346,6 +369,7 @@ void rk(int total){
 	Q_tmp = Q + dQ_over_ds3 * ds;	
 	M_tmp = M + dM_over_ds3 * ds;
 	theta_tmp = theta + dtheta_over_ds3 * ds;
+	theta_tmp = thetacheck(theta_tmp);
 	E_tmp = E + dE_over_ds3 * ds;
 	
 	// centre position of the next step
@@ -481,13 +505,13 @@ double func16(double M_tmp, double Q_tmp, double theta_tmp, double V_tmp){
 	//if(flag==0){ks_tmp=sqrt(rho_a/rho_c)/16;}
 	//else{ks_tmp=ks;}	// use these lines when you use ks for gas thrust region; include rho_a and rho_c as local
 	
-	ks_tmp=ks;	// gas thrust region also assumes 0.09
+	ks_tmp=KS_ENTRAIN_U;	// gas thrust region also assumes 0.09
 				// remove this line when you take
 				// ks = f(rho_a. rho_c)
 		
 	//printf("flag=%d\tks=%1.4f\n", flag, ks_tmp);
 	
-	ue_tmp = ks_tmp * fabs(M_tmp/Q_tmp - V_tmp * cos(theta_tmp)) + kw * fabs(V_tmp * sin(theta_tmp));
+	ue_tmp = ks_tmp * fabs(M_tmp/Q_tmp - V_tmp * cos(theta_tmp)) + KW_ENTRAIN_V * fabs(V_tmp * sin(theta_tmp));
 	
 	return ue_tmp;
 }
@@ -654,7 +678,7 @@ double get_dir(double z_tmp, int total){	//return wind direction based on discre
 		}
 		i++;
 	}
-	//printf("dir\t%d\t%1.2f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\n", i, z, ratio, dir, wind1, wind2);
+	//printf("dir\t%d\t%1.4f\t%1.4f\t%1.4f\t%1.4f\t%1.4f\n", i, z, ratio, dir, wind1, wind2);
 	return dir;
 }
 
@@ -665,10 +689,19 @@ int read_wind(FILE *in_wind){
 	double ratio;
 	double delta_wind, wind_tmp, wind1, wind2;
 	char line[100];
-	double height[100], speed[100], dir[100];
-	double atm_temp[100], atm_pres[100];
+	
+	// Modified following lines till rewind(in_wind) on Jan 17, 2022
+	while(NULL != fgets(line, MAX_LINE, in_wind)){
+		if(line[0] == '#')continue;
+		i++;
+	}
+	
+	double height[i+1], speed[i+1], dir[i+1];
+	double atm_temp[i+1], atm_pres[i+1];
 	int level;
 	
+	i=0;
+	rewind(in_wind);
 	level = z0;
 	
 	//FILE *in_wind;

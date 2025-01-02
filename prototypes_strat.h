@@ -58,6 +58,8 @@ double func18(double);				// particle content
 double func19(double);				// Rg calc
 double func20(double);				// Cp calc
 
+double thetacheck(double);
+
 double calcCp0(void);			// Cp0 calc (eq. 20.5; in text between eq20 and 21)
 double func21(double);			// temperature profile
 double calc_Tatm(double, int);
